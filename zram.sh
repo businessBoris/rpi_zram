@@ -1,16 +1,20 @@
-#!/bin/bash
-cores=$(nproc --all)
-modprobe zram num_devices=$cores
+#!/bin/sh
+# zram-swap setup
 
-swapoff -a
+CORES=$( nproc --all )
+modprobe zram num_devices="$CORES"
+MEM=$( awk '/MemTotal:/ { print $2 }' /proc/meminfo )
+EACH=$( expr $MEM / $CORES )
 
-totalmem=`free | grep -e "^Mem:" | awk '{print $2}'`
-mem=$(( ($totalmem / $cores)* 1024 ))
+swapoff --all
 
-core=0
-while [ $core -lt $cores ]; do
-  echo $mem > /sys/block/zram$core/disksize
-  mkswap /dev/zram$core
-  swapon -p 5 /dev/zram$core
-  let core=core+1
+for core in $( seq 0 $( expr "$CORES" - 1 ) )
+do
+  FREEDEV=$( zramctl --find --size "${EACH}KiB" )
+  mkswap "$FREEDEV"
+  swapon --priority 5 "$FREEDEV" 
 done
+
+# zramctl on raspi not as recent as x86.
+# options restricted.
+zramctl
